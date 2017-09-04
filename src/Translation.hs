@@ -5,6 +5,7 @@ import Control.Monad
 import Data.HashMap (Map)
 import qualified Data.HashMap as Map
 import Data.List.Split
+import Data.Maybe
 
 import Rna
 import Protein
@@ -65,26 +66,22 @@ codonize :: [RnaBase] -> Maybe Codon
 codonize [a, b, c] = Just $ Codon (a, b, c)
 codonize _ = Nothing
 
-maybeToList :: Maybe a -> [a]
-maybeToList = \case
-  Just x -> [x]
-  Nothing -> []
-
 translateRaw :: Rna -> [Result]
-translateRaw (Rna rna) = concatMap tr $ chunksOf 3 rna
+translateRaw (Rna rna) = catMaybes . map tr $ chunksOf 3 rna
   where
-    tr = maybeToList . liftM translateCodon . codonize
+    tr = liftM translateCodon . codonize
+
+resultToMaybe :: Result -> Maybe AminoAcid
+resultToMaybe = \case
+    Ok x -> Just x
+    Stop -> Nothing
 
 x & f = f x
-
-resultToList :: Result -> [AminoAcid]
-resultToList = \case
-    Ok x -> [x]
-    Stop -> []
 
 translate :: Rna -> Protein
 translate rna = Protein
   $ translateRaw rna
   & dropWhile (/= Ok Methionine)
   & takeWhile (/= Stop)
-  & concatMap resultToList
+  & map resultToMaybe
+  & foldr (maybe id (:)) []
